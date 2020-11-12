@@ -8,6 +8,7 @@ const axios = require('axios');
 const redis = require('redis');
 const redisClient = redis.createClient();
 
+var isInitialized = false;
 var subjects = [
     {
         "subjectID": "240-101",
@@ -271,34 +272,18 @@ var isValidSubject = async (subject_id) => {
     }
 }
 
-// to check that this person can register this course (not about number of registrants)
-var isAbleToRegister = async (subject_id) => {
-        await MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true },
-            (err, db) => {
-                if (err) throw err;
-                var dbo = db.db("registration");
-                dbo.collection("subjects").findOne({"subjectID": subject_id}, (err, subject) => {
-                    if (err) throw err;
-                    if(subject.registered != null) {
-
-                    } else {
-
-                    }
-                });
-            }
-        );
-}
-
-
 app.use(cors());
 
 //initialize web server & redis
 app.get('/', (req, res) => {
     res.send("Hello!, Welcome to RegisterApp");
-    subjects.forEach((subject, index) => {
-        redisClient.set(subject.subjectID, subject.registered.toString());
-        redisClient.set(subject.subjectID + "Max", subject.maximum.toString())
-    });
+    if(!isInitialized) {
+        subjects.forEach((subject, index) => {
+            redisClient.set(subject.subjectID, subject.registered.toString());
+            redisClient.set(subject.subjectID + "Max", subject.maximum.toString())
+        });
+        isInitialized = !isInitialized;
+    }
 });
 
 //get all subjects in database
@@ -349,7 +334,17 @@ app.get('/subjects/:id/register', (req, res) => {
         if (err) throw err;
         if (parseInt(registered) + 1 <= max) {
             redisClient.incr(subject_id, (err, after) => {
-                
+                //increment number of registrants
+                MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true },
+                    (err, db) => {
+                        if (err) throw err;
+                        var dbo = db.db("registration");
+                        dbo.collection("subjects").update({"subjectID": subject_id}, {$inc: {"registered": 1}}, (err, subject) => {
+                            if (err) throw err;
+                            db.close();
+                        });
+                    }
+                );
                 res.send(`number of registered students in ${subject_id} is ${after}/${max}`);
             });
         } else {
@@ -362,6 +357,17 @@ app.get('/subjects/:id/register', (req, res) => {
 app.get('/subjects/:id/withdraw', (req, res) => {
     var subject_id = req.params.id;
     redisClient.decr(subject_id, (err, registered) => {
+        //decrement number of registrants
+        MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true },
+            (err, db) => {
+                if (err) throw err;
+                var dbo = db.db("registration");
+                dbo.collection("subjects").update({"subjectID": subject_id}, {$inc: {"registered": -1}}, (err, subject) => {
+                    if (err) throw err;
+                    db.close();
+                });
+            }
+        );
         if (err) throw err;
         res.send(`number of registered students in ${subject_id} is ${registered}`);
         });
@@ -395,3 +401,13 @@ app.get('/delete_subjects', (req, res) => {
 /*------------------------------------------------------------------------------------------------------------------*/
 
 app.listen(port, () => console.log(`Registration_System_Server is listening on port ${port}`));
+
+//TO DO
+/*
+1. go to localhost:8000/delete_subjects
+2. go to localhost:8000/add_subjects
+3. go to / (for initialize redis)
+4. here we go
+
+p.s. if you go to / again after 4., you need to redo 1-3 again.
+*/
