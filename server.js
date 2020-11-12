@@ -314,11 +314,23 @@ app.get('/subjects', (req, res) => {
     );
 });
 
+//to register in :id course
 app.get('/subjects/:id/register', (req, res) => {
     var subject_id = req.params.id;
-    redisClient.get(subject_id, async(err, data) => {
+    var max;
+    redisClient.get(subject_id + "Max",(err, maximum) => {
         if (err) throw err;
-        res.send(data); //send number of registrant
+        max = maximum;
+    });
+    redisClient.get(subject_id, (err, registered) => {
+        if (err) throw err;
+        if (parseInt(registered) + 1 <= max) {
+            redisClient.incr(subject_id);
+            res.send(`number of registered student in ${subject_id} is ${registered}/${max}`);
+
+        } else {
+            res.send(`${subject_id} is full now (max = ${max})`)
+        }
     });
 });
 
