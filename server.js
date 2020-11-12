@@ -271,27 +271,28 @@ var isValidSubject = async (subject_id) => {
     }
 }
 
-// to check that this person can register this course
-// var isAbleToRegister = async (subject_id) => {
-//         await MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true },
-//             (err, db) => {
-//                 if (err) throw err;
-//                 var dbo = db.db("registration");
-//                 dbo.collection("subjects").findOne({"subjectID": subject_id}, (err, subject) => {
-//                     if (err) throw err;
-//                     if(subject.registered != null) {
+// to check that this person can register this course (not about number of registrants)
+var isAbleToRegister = async (subject_id) => {
+        await MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true },
+            (err, db) => {
+                if (err) throw err;
+                var dbo = db.db("registration");
+                dbo.collection("subjects").findOne({"subjectID": subject_id}, (err, subject) => {
+                    if (err) throw err;
+                    if(subject.registered != null) {
 
-//                     } else {
+                    } else {
 
-//                     }
-//                 });
-//             }
-//         );
-// }
+                    }
+                });
+            }
+        );
+}
 
 
 app.use(cors());
 
+//initialize web server & redis
 app.get('/', (req, res) => {
     res.send("Hello!, Welcome to RegisterApp");
     subjects.forEach((subject, index) => {
@@ -300,6 +301,7 @@ app.get('/', (req, res) => {
     });
 });
 
+//get all subjects in database
 app.get('/subjects', (req, res) => {
     MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true },
         (err, db) => {
@@ -314,26 +316,7 @@ app.get('/subjects', (req, res) => {
     );
 });
 
-//to register in :id course
-app.get('/subjects/:id/register', (req, res) => {
-    var subject_id = req.params.id;
-    var max;
-    redisClient.get(subject_id + "Max",(err, maximum) => {
-        if (err) throw err;
-        max = maximum;
-    });
-    redisClient.get(subject_id, (err, registered) => {
-        if (err) throw err;
-        if (parseInt(registered) + 1 <= max) {
-            redisClient.incr(subject_id);
-            res.send(`number of registered student in ${subject_id} is ${registered}/${max}`);
-
-        } else {
-            res.send(`${subject_id} is full now (max = ${max})`)
-        }
-    });
-});
-
+//to get subject by id
 app.get('/subjects/:id', (req, res) => {
     var subject_id = req.params.id;
     if(isValidSubject(subject_id)) {
@@ -353,7 +336,40 @@ app.get('/subjects/:id', (req, res) => {
     }
 });
 
+/*---------------------------------------------- register and withdraw ----------------------------------------------*/
+//to register in :id course
+app.get('/subjects/:id/register', (req, res) => {
+    var subject_id = req.params.id;
+    var max;
+    redisClient.get(subject_id + "Max",(err, maximum) => {
+        if (err) throw err;
+        max = maximum;
+    });
+    redisClient.get(subject_id, (err, registered) => {
+        if (err) throw err;
+        if (parseInt(registered) + 1 <= max) {
+            redisClient.incr(subject_id, (err, after) => {
+                
+                res.send(`number of registered students in ${subject_id} is ${after}/${max}`);
+            });
+        } else {
+            res.send(`${subject_id} is full now (max = ${max})`)
+        }
+    });
+});
+
+//to withdraw in :id course
+app.get('/subjects/:id/withdraw', (req, res) => {
+    var subject_id = req.params.id;
+    redisClient.decr(subject_id, (err, registered) => {
+        if (err) throw err;
+        res.send(`number of registered students in ${subject_id} is ${registered}`);
+        });
+});
+/*-------------------------------------------------------------------------------------------------------------------*/
+
 /*---------------------------------------------- add and delete all ----------------------------------------------*/
+//add
 app.get('/add_subjects', async (req, res) => {
     await MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true },
         (err, db) => {
@@ -365,6 +381,7 @@ app.get('/add_subjects', async (req, res) => {
     );
 });
 
+//delete
 app.get('/delete_subjects', (req, res) => {
     MongoClient.connect(url, { useNewUrlParser: true, useUnifiedTopology: true },
         (err, db) => {
