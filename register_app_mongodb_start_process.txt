@@ -1,0 +1,6 @@
+appname: regapp
+current directory = D:\Em\University_Subjects\Internet%20Programming\ip_assignment_MongoDB_data
+---------------------------------------------------------------------------
+mongod --replSet regapp --dbpath  ./node1 --port 40000
+mongod --replSet regapp --dbpath  ./node2 --port 40001
+mongod --replSet regapp --dbpath  ./node3 --port 40002
